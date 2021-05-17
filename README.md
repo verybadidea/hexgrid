@@ -2,12 +2,10 @@
 Hexagonal grid implementation in FreeBASIC based on https://www.redblobgames.com/grids/hexagons/
 
 # To do
-Demo:
-- cirkel
-- path finding
-- Hexatris
-
-To do (not yet implemented):
+- Demo: cirkel
+- Demo: path finding
+- Demo: Hexatris
+- Make pt_dbl_list obsolete
 - Movement Range -> return list of hex tiles?
 - Obstacles / path-finding -> return list of hex tiles?
 - 60° rotation around other hex 
