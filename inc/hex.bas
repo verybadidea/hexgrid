@@ -46,7 +46,7 @@ dim shared as const hex_orientation layout_flat = type( _
 
 type hex_layout
 	dim as const hex_orientation orientation
-	dim as const pt_dbl size
+	dim as const pt_dbl size 'distance from origin to a corner
 	dim as const pt_dbl origin
 end type
 
@@ -114,10 +114,11 @@ function hex_corner_offset(layout as hex_layout, corner as integer) as pt_dbl
 	return type(size.x * cos(angle), size.y * sin(angle))
 end function
 
+'a bit complex way to make an array of 6 points
 function hex_corner_list(layout as hex_layout, h as hex_axial) as pt_list
 	dim as pt_list corners
 	dim as pt_dbl center = hex_to_pixel(layout, h)
-	for i as integer = 0 to 5 'loop 6 corners
+	for i as integer = 0 to 5 'loop 6 corners (clockwise)
 		dim as pt_dbl offset = hex_corner_offset(layout, i)
 		corners.push(type(center.x + offset.x, center.y + offset.y))
 	next
@@ -135,28 +136,56 @@ sub hex_draw_outline(layout as hex_layout, h as hex_axial, c as ulong)
 	next
 end sub
 
-'-------------------------------------------------------------------------------
+sub draw_triangle_filled(pt1 as pt_dbl, pt2 as pt_dbl, pt3 as pt_dbl, c as ulong)
+	dim as integer x, y, xmid
+	dim as double x1, x2
+	dim as double dx12, dx13, dx23
+	'order top to bottom
+	if (pt1.y > pt2.y) then swap pt1, pt2
+	if (pt1.y > pt3.y) then swap pt1, pt3
+	if (pt2.y > pt3.y) then swap pt2, pt3
+	'calculate line slopes
+	dx12 = (pt2.x - pt1.x) / (pt2.y - pt1.y)
+	dx13 = (pt3.x - pt1.x) / (pt3.y - pt1.y)
+	dx23 = (pt3.x - pt2.x) / (pt3.y - pt2.y)
+	'Upper half triangle
+	x1 = pt1.x
+	x2 = pt1.x
+	for y = pt1.y to pt2.y - 1
+		line (x1, y)-(x2, y), c
+		x1 += dx12
+		x2 += dx13
+	next
+	'lower half triangle
+	x1 = pt2.x' + dx23 / 2
+	for y = pt2.y to pt3.y
+		line (x1, y)-(x2, y), c
+		x1 += dx23
+		x2 += dx13
+	next
+	'make edges nice (optional)
+	line (pt1.x, pt1.y)-(pt2.x, pt2.y), c
+	line (pt2.x, pt2.y)-(pt3.x, pt3.y), c
+	line (pt3.x, pt3.y)-(pt1.x, pt1.y), c
+end sub 
 
-'Demo:
-'- rotation
-'- neighbour random walk
-'- cirkel
-'- path finding
-'- Hexatris
+sub hex_draw_filled(layout as hex_layout, h as hex_axial, c as ulong)
+	dim as pt_dbl center = hex_to_pixel(layout, h)
+	'create + fill array with 6 conners positions
+	dim as pt_dbl corner(0 to 5)
+	for i as integer = 0 to 5 'loop 6 corners (clockwise)
+		dim as pt_dbl offset = hex_corner_offset(layout, i)
+		corner(i) = type(center.x + offset.x, center.y + offset.y)
+	next
+	select case layout.orientation.start_angle
+	case 0.0 'flat top
+		line(corner(4).x, corner(4).y)-(corner(1).x, corner(1).y), c, bf
+		draw_triangle_filled(corner(0), corner(1), corner(5), c)
+		draw_triangle_filled(corner(2), corner(3), corner(4), c)
+	case 0.5 'pointy top
+		line(corner(3).x, corner(3).y)-(corner(0).x, corner(0).y), c, bf
+		draw_triangle_filled(corner(0), corner(1), corner(2), c)
+		draw_triangle_filled(corner(3), corner(4), corner(5), c)
+	end select
+end sub
 
-'To do (not yet implemented):
-'- Doubled coordinates
-'- Neighbors, offset coordinates
-'- Neighbors, doubled coordinates
-'- Distance, offset coordinates
-'- Distance, doubled coordinates
-'- Movement Range -> return list of hex tiles?
-'- Obstacles / path-finding -> return list of hex tiles?
-'- 60° rotation around other hex 
-'- Ring / circle -> return list of hex tiles?
-'- Spiral ring -> return list of hex tiles?
-'- Field of view (if needed, complex)
-'- Hex_to_pixel, Offset coordinates
-'- Hex_to_pixel, Doubled coordinates
-'- Name change: hex_axial --> hex, hex_cube --> cube
-'- Draw_hex_filled
