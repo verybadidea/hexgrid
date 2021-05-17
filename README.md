@@ -1,15 +1,13 @@
 # hexgrid
-Hexagonal grid implementation in FreeBASIC based https://www.redblobgames.com/grids/hexagons/
+Hexagonal grid implementation in FreeBASIC based on https://www.redblobgames.com/grids/hexagons/
 
 # To do
 Demo:
 - cirkel
 - path finding
 - Hexatris
-- Flat / streched grid (size x/y)
 
 To do (not yet implemented):
-- Draw_hex_filled
 - Movement Range -> return list of hex tiles?
 - Obstacles / path-finding -> return list of hex tiles?
 - 60° rotation around other hex 
