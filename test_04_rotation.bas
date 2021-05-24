@@ -50,6 +50,11 @@ while not multikey(FB.SC_ESCAPE)
 			hex_draw_outline(layout, ha, rgb(255, 0, 0))
 			center = hex_to_pixel(layout, ha)
 			draw string(center.x - 3, center.y - 7), "R", rgb(255, 0, 0)
+			'tile at 60 degrees rotated right twice
+			ha = hex_cube_to_axial(hex_rotate_right(hex_rotate_right(hc)))
+			hex_draw_outline(layout, ha, rgb(0, 0, 255))
+			center = hex_to_pixel(layout, ha)
+			draw string(center.x - 3, center.y - 7), "T", rgb(0, 0, 255)
 		else
 			draw string(10, 10), "Mouse move inside grid"
 		end if

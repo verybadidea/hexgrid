@@ -23,7 +23,8 @@ function hex_cube_to_axial(hc as hex_cube) as hex_axial
 end function
 
 function hex_axial_to_cube(ha as hex_axial) as hex_cube
-	return type(ha.q, ha.r, -(ha.q + ha.r))
+	'return type(ha.q, ha.r, -(ha.q + ha.r))
+	return type(ha.q, -(ha.q + ha.r), ha.r)
 end function
 
 '--------------------------------- hex layout ----------------------------------
@@ -110,6 +111,8 @@ end function
 'note: for speed, the corner positions can be precalculated (after setting size)
 function hex_corner_offset(layout as hex_layout, corner as integer) as pt_dbl
 	dim as pt_dbl size = layout.size
+	size.x *= 0.85
+	size.y *= 0.85
 	dim as double angle = 2.0 * M_PI * (layout.orientation.start_angle + corner) / 6
 	return type(size.x * cos(angle), size.y * sin(angle))
 end function
@@ -164,12 +167,12 @@ sub draw_triangle_filled(pt1 as pt_dbl, pt2 as pt_dbl, pt3 as pt_dbl, c as ulong
 		x2 += dx13
 	next
 	'make edges nice (optional)
-	line (pt1.x, pt1.y)-(pt2.x, pt2.y), c
-	line (pt2.x, pt2.y)-(pt3.x, pt3.y), c
-	line (pt3.x, pt3.y)-(pt1.x, pt1.y), c
+	'line (pt1.x, pt1.y)-(pt2.x, pt2.y), c
+	'line (pt2.x, pt2.y)-(pt3.x, pt3.y), c
+	'line (pt3.x, pt3.y)-(pt1.x, pt1.y), c
 end sub 
 
-sub hex_draw_filled(layout as hex_layout, h as hex_axial, c as ulong)
+sub hex_draw_filled(layout as hex_layout, h as hex_axial, c_fill as ulong) 
 	dim as pt_dbl center = hex_to_pixel(layout, h)
 	'create + fill array with 6 conners positions
 	dim as pt_dbl corner(0 to 5)
@@ -179,13 +182,37 @@ sub hex_draw_filled(layout as hex_layout, h as hex_axial, c as ulong)
 	next
 	select case layout.orientation.start_angle
 	case 0.0 'flat top
-		line(corner(4).x, corner(4).y)-(corner(1).x, corner(1).y), c, bf
-		draw_triangle_filled(corner(0), corner(1), corner(5), c)
-		draw_triangle_filled(corner(2), corner(3), corner(4), c)
+		line(corner(4).x, corner(4).y)-(corner(1).x, corner(1).y), c_fill, bf
+		draw_triangle_filled(corner(0), corner(1), corner(5), c_fill)
+		draw_triangle_filled(corner(2), corner(3), corner(4), c_fill)
 	case 0.5 'pointy top
-		line(corner(3).x, corner(3).y)-(corner(0).x, corner(0).y), c, bf
-		draw_triangle_filled(corner(0), corner(1), corner(2), c)
-		draw_triangle_filled(corner(3), corner(4), corner(5), c)
+		line(corner(3).x, corner(3).y)-(corner(0).x, corner(0).y), c_fill, bf
+		draw_triangle_filled(corner(0), corner(1), corner(2), c_fill)
+		draw_triangle_filled(corner(3), corner(4), corner(5), c_fill)
 	end select
 end sub
 
+sub hex_draw_filled_border(layout as hex_layout, h as hex_axial, c_fill as ulong, c_border as ulong) 
+	dim as pt_dbl center = hex_to_pixel(layout, h)
+	'create + fill array with 6 conners positions
+	dim as pt_dbl corner(0 to 5)
+	for i as integer = 0 to 5 'loop 6 corners (clockwise)
+		dim as pt_dbl offset = hex_corner_offset(layout, i)
+		corner(i) = type(center.x + offset.x, center.y + offset.y)
+	next
+	select case layout.orientation.start_angle
+	case 0.0 'flat top
+		line(corner(4).x, corner(4).y)-(corner(1).x, corner(1).y), c_fill, bf
+		draw_triangle_filled(corner(0), corner(1), corner(5), c_fill)
+		draw_triangle_filled(corner(2), corner(3), corner(4), c_fill)
+	case 0.5 'pointy top
+		line(corner(3).x, corner(3).y)-(corner(0).x, corner(0).y), c_fill, bf
+		draw_triangle_filled(corner(0), corner(1), corner(2), c_fill)
+		draw_triangle_filled(corner(3), corner(4), corner(5), c_fill)
+	end select
+	hex_draw_outline(layout, h, c_border)
+end sub
+
+#define hex_draw_o	hex_draw_outline
+#define hex_draw_f	hex_draw_filled
+#define hex_draw_fb	hex_draw_filled_border

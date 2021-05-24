@@ -46,7 +46,8 @@ while not multikey(FB.SC_ESCAPE)
 		hc = hl.pop()
 		ha = hex_cube_to_axial(hc)
 		'hex_draw_outline(layout, ha, &hfff0f060) 'yellow
-		hex_draw_outline(layout, ha, colour)
+		hex_draw_filled(layout, ha, colour)
+		hex_draw_outline(layout, ha, &hff606060) 'drak grey
 		draw string (10, 10 + i * 16), str(i) & ". " & ha
 	next
 	screenunlock

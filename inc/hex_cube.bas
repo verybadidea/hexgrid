@@ -49,11 +49,13 @@ end function
 
 '60° rotation
 function hex_rotate_left(a as hex_cube) as hex_cube
-    return type(-a.z, -a.x, -a.y)
+	'return type(-a.z, -a.x, -a.y)
+	return type(-a.y, -a.z, -a.x)
 end function
 
 function hex_rotate_right(a as hex_cube) as hex_cube
-    return type(-a.y, -a.z, -a.x)
+	'return type(-a.y, -a.z, -a.x)
+	return type(-a.z, -a.x, -a.y)
 end function
 
 'For 60° rotation around other hex: translate, rotate, translate back: TODO
