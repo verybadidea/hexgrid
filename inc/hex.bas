@@ -27,6 +27,16 @@ function hex_axial_to_cube(ha as hex_axial) as hex_cube
 	return type(ha.q, -(ha.q + ha.r), ha.r)
 end function
 
+'------------------------------- axial rotation --------------------------------
+
+sub hex_axial_rotate_right(byref ha as hex_axial)
+	ha = hex_cube_to_axial(hex_rotate_right(hex_axial_to_cube(ha)))
+end sub
+
+sub hex_axial_rotate_left(byref ha as hex_axial)
+	ha = hex_cube_to_axial(hex_rotate_left(hex_axial_to_cube(ha)))
+end sub
+
 '--------------------------------- hex layout ----------------------------------
 
 type hex_orientation
