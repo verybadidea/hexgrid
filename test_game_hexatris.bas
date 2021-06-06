@@ -13,12 +13,14 @@ const as string KEY_SPC = chr(32)
 const SW = 400, SH = 600
 screenres SW, SH, 32
 width SW \ 8, SH \ 16
+
 dim as hex_layout layout1 = _
 	type(layout_flat, type<pt_dbl>(17, 16.2), type<pt_dbl>(SW \ 2, SH \ 2))
 
-const map_rh = 10 'map height radius
-const map_rw = 7 'map width radius
-dim as ulong map(-map_rh to +map_rh, -map_rh to +map_rh)
+const brd_rh = 10 'board height radius
+const brd_rw = 7 'board width radius
+const brd_psr = -9 'piece start row
+dim as ulong board(-brd_rh to +brd_rh, -brd_rh to +brd_rh)
 
 const piece_size = 4
 type piece_type
@@ -30,23 +32,34 @@ end type
 
 const num_pieces = 9
 dim as piece_type piece(num_pieces-1) = {_ '(q, r)
-	type((0, 0), {(0, -1), (0, 0), (0, 1), (0, 2)}, &hff007070),_
-	type((0, 0), {(0, -1), (0, 0), (0, 1), (1, 1)}, &hff700070),_
-	type((0, 0), {(0, -1), (0, 0), (0, 1), (-1, 0)}, &hff707000),_
-	type((0, 0), {(0, -1), (0, 0), (0, 1), (1, -1)}, &hff700000),_
-	type((0, 0), {(0, -1), (0, 0), (0, 1), (-1, 2)}, &hff007000),_
-	type((0, 0), {(0, -1), (1, -1), (1, 0), (0, 1)}, &hff000070),_
-	type((0, 0), {(0, -1), (1, -1), (1, 0), (0, 1)}, &hff704040),_
-	type((0, 0), {(0, -1), (0, 0), (1, 0), (1, 1)}, &hff404070),_
-	type((0, 0), {(0, -1), (0, 0), (-1, 1), (-1, 2)}, &hff407040)}
+	type((0, 0), {(0, -1), (0, 0), (0, 1), (0, 2)},   &hff007070),_
+	type((0, 0), {(0, -1), (0, 0), (0, 1), (1, 1)},   &hff700070),_
+	type((0, 0), {(0, -1), (0, 0), (0, 1), (-1, 0)},  &hff707000),_
+	type((0, 0), {(0, -1), (0, 0), (0, 1), (1, -1)},  &hff700000),_
+	type((0, 0), {(0, -1), (0, 0), (0, 1), (-1, 2)},  &hff007000),_
+	type((0, 0), {(0, -1), (1, -1), (1, 0), (0, 1)},  &hff400070),_
+	type((0, 0), {(0, -1), (1, -1), (1, 0), (0, 1)},  &hff704000),_
+	type((0, 0), {(0, -1), (0, 0), (1, 0), (1, 1)},   &hff004070),_
+	type((0, 0), {(0, -1), (0, 0), (-1, 1), (-1, 2)}, &hff507000)}
 
 function get_tile_pos(piece as piece_type, tile_idx as integer) as hex_axial
 	return hex_axial_add(piece.abs_pos, piece.tile_pos(tile_idx))
 end function
 
-function valid_pos(ha as hex_axial) as boolean
+'valid board tile index?
+function valid_tile_pos(ha as hex_axial) as boolean
 	dim as hex_cube hc = hex_axial_to_cube(ha)
-	return (abs(hc.x) <= map_rw) and (abs(hc.y) <= map_rh) and (abs(hc.z) <= map_rh)
+	return (abs(hc.x) <= brd_rw) and (abs(hc.y) <= brd_rh) and (abs(hc.z) <= brd_rh)
+end function
+
+'all tiles valid board index & not occupied?
+function free_piece_pos(piece as piece_type, board() as ulong) as boolean
+	for iTile as integer = 0 to piece_size - 1
+		dim as hex_axial ha = get_tile_pos(piece, iTile)
+		if not valid_tile_pos(ha) then return false
+		if board(ha.q, ha.r) <> 0 then return false
+	next
+	return true
 end function
 
 'function is correct for all cases!
@@ -59,18 +72,24 @@ function pos_off_screen(layout as hex_layout, ha as hex_axial) as boolean
 	return false
 end function
 
-sub draw_board(layout as hex_layout)
+sub draw_board(board() as ulong, layout as hex_layout)
 	dim as hex_axial ha
-	for q as integer = -(map_rh-2) to +(map_rh-2)
+	for q as integer = -(brd_rh-2) to +(brd_rh-2)
 		ha.q = q
-		for r as integer = -(map_rh+5) to +(map_rh+5)
+		for r as integer = -(brd_rh+5) to +(brd_rh+5)
 			ha.r = r
 			if pos_off_screen(layout, ha) = false then
-				if valid_pos(ha) then
-					'if map(q, r) <> 0 then hex_draw_f(layout1, ha, &hffa00000)
-					hex_draw_o(layout, ha, &hff404040)
+				if valid_tile_pos(ha) then
+					if board(q, r) <> 0 then
+						'piece tile, with bright edge
+						hex_draw_fb(layout, ha, board(q, r), board(q, r) shl 1)
+					else
+						'no piece tile on board
+						hex_draw_o(layout, ha, &hff404040)
+					end if
 				else
-					hex_draw_fb(layout, ha, &hff606060, &hff808080)
+					'outside board
+					hex_draw_fb(layout, ha, &hff505050, &hff909090)
 				end if
 			end if
 		next
@@ -95,58 +114,112 @@ sub rotate_piece(byref piece as piece_type, direction as integer)
 	next
 end sub
 
-dim as integer mx, my
-dim as integer iPiece = 1
-dim as piece_type current_piece = piece(iPiece)
+sub move_piece(byref piece as piece_type, direction as integer)
+	piece.abs_pos = hex_axial_neighbor(piece.abs_pos, direction)
+end sub
 
-while not multikey(FB.SC_ESCAPE)
+'choose random piece and position at top of board
+function new_piece(piece() as piece_type) as piece_type
+	dim as piece_type ret_piece = piece(int(rnd() * num_pieces))
+	ret_piece.abs_pos.r = brd_psr
+	return ret_piece
+end function
+
+const as double start_interval = 1.0 '1 tiles per second
+const as double drop_interval = 0.05 '20 tiles per second
+
+dim as piece_type current_piece
+dim as double t = timer, t_step = start_interval, t_next = t + t_step
+dim as integer enable_control = true
+dim as integer quit = 0, request_new = true
+
+randomize timer
+while quit = 0
+	if request_new = true then
+		current_piece = new_piece(piece())
+		request_new = false
+	end if
+
 	screenlock
 	line(0, 0)-(SW-1, SH-1), 0, bf 'clear screen
-	draw_board(layout1)
-	'iPiece = int(rnd() * num_pieces)
-	draw_piece(current_piece, layout1)
-	'highlight tile at cursor
-	'~ if getmouse(mx, my) = 0 then
-		'~ dim as hex_cube hc = pixel_to_hex_int(layout1, type(mx, my))
-		'~ if abs(hc.x) <= map_radius and abs(hc.y) <= map_radius and abs(hc.z) <= map_radius then
-			'~ dim as hex_axial ha = hex_cube_to_axial(hc)
-			'~ hex_draw_o(layout1, ha, rgb(255, 255, 255))
-			'~ draw string(10, 10), "ha current_piece.tile(iTile): " & current_piece.tile_pos(0)
-			'~ draw string(10, 30), "hc current_piece.tile(iTile): " & hex_axial_to_cube(current_piece.tile_pos(0))
-		'~ end if
-	'~ else
-		'~ draw string(10, 10), "Mouse not in window"
-	'~ end if
+	draw_board(board(), layout1)
+	if free_piece_pos(current_piece, board()) then
+		draw_piece(current_piece, layout1)
+	end if
+	draw string (5, 0), "keys: up, down, left, right, space, escape"
 	screenunlock
 
 	dim as string key = inkey
-	select case key
-	case KEY_LE
-		current_piece.abs_pos.q -= 1
+	if enable_control = true then
+		select case key
+		case KEY_ESC
+			quit = 1
+		case KEY_LE
+			move_piece(current_piece, HEX_AX_LE_DN)
+			if not free_piece_pos(current_piece, board()) then
+				move_piece(current_piece, HEX_AX_RI_UP) 'undo move
+			end if
+		case KEY_RI
+			move_piece(current_piece, HEX_AX_RI_DN)
+			if not free_piece_pos(current_piece, board()) then
+				move_piece(current_piece, HEX_AX_LE_UP) 'undo move
+			end if
+		case KEY_UP
+			rotate_piece(current_piece, +1)
+			if not free_piece_pos(current_piece, board()) then
+				rotate_piece(current_piece, -1) 'undo move
+			end if
+		case KEY_DN
+			rotate_piece(current_piece, -1)
+			if not free_piece_pos(current_piece, board()) then
+				rotate_piece(current_piece, +1) 'undo move
+			end if
+		case KEY_SPC
+			enable_control = false
+			current_piece.abs_pos.r += 1
+			t_step = drop_interval
+			t_next = t + t_step
+		end select
+	end if
+	if t > t_next then
 		current_piece.abs_pos.r += 1
-	case KEY_RI
-		current_piece.abs_pos.q += 1
-	case KEY_UP
-		rotate_piece(current_piece, +1)
-	case KEY_DN
-		rotate_piece(current_piece, -1)
-	end select
-	'~ 'update piece
-	'~ current_piece.abs_pos.r += 1
-
+		t_next = t + t_step
+		if not free_piece_pos(current_piece, board()) then
+			current_piece.abs_pos.r -= 1
+			'copy to board
+			for iTile as integer = 0 to piece_size - 1
+				dim as hex_axial ha = get_tile_pos(current_piece, iTile)
+				if valid_tile_pos(ha) then 'redundant check
+					board(ha.q, ha.r) = current_piece.c_fill
+				end if
+			next
+			request_new = true
+			enable_control = true
+			t_step = start_interval
+			t_next = t + t_step
+		end if
+	end if
 	sleep 1
+	t = timer
 wend
+locate 13, 13: print "End, press any key to exit"
 
 getkey()
 
 'steps:
-'game loop: move down with interval
-'game loop: keys: left, right
-'game loop: keys: up, down for rotation
-'game loop: keys: space for drop
-'check valid pos (no collision, in map)
-'check game over
-'points / scoring
-'copy to board
+'implement 'wall-kick'
+'points / scoring: make lines, shift/drop board
+'check cannot place piece on start pos: game over
 'check line drop down/left and/or down right
-'make 3 piece version also
+'drop position preview (option)
+
+'~ 'show all pieces
+'~ for iPiece as integer = 0 to num_pieces-1
+	'~ current_piece = piece(iPiece)
+	'~ rotate_piece(current_piece, 1)
+	'~ current_piece.abs_pos.r = iPiece * 2 - 9
+	'~ current_piece.abs_pos.q = ((iPiece+1) mod 2) * 6 - 3
+	'~ draw_piece(current_piece, layout1)
+'~ next
+'~ getkey()
+'~ end

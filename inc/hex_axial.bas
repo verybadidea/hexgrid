@@ -18,6 +18,13 @@ function hex_axial_substract(a as hex_axial, b as hex_axial) as hex_axial
 	return type(a.q - b.q, a.r - b.r)
 end function
 
+const HEX_AX_RI_DN = 0
+const HEX_AX_RI_UP = 1
+const HEX_AX_UP = 2
+const HEX_AX_LE_UP = 3
+const HEX_AX_LE_DN = 4
+const HEX_AX_DN = 5
+
 dim shared as const hex_axial hex_axial_direction(0 to 5) = {_
 	type(+1, 0), type(+1, -1), type(0, -1), _
 	type(-1, 0), type(-1, +1), type(0, +1) }
