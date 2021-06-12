@@ -10,6 +10,17 @@ operator hex_axial.cast() as string
 	return "(q: " & q & ", r: " & r & ")"
 end operator
 
+operator = (a as hex_axial, b as hex_axial) as boolean
+	if a.q <> b.q then return false
+	if a.r <> b.r then return false
+	return true
+end operator
+
+operator <> (a as hex_axial, b as hex_axial) as boolean
+	if a.q = b.q and a.r = b.r then return false
+	return true
+end operator
+
 function hex_axial_add(a as hex_axial, b as hex_axial) as hex_axial
 	return type(a.q + b.q, a.r + b.r)
 end function

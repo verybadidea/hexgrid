@@ -202,7 +202,7 @@ sub hex_draw_filled(layout as hex_layout, h as hex_axial, c_fill as ulong)
 	end select
 end sub
 
-sub hex_draw_filled_border(layout as hex_layout, h as hex_axial, c_fill as ulong, c_border as ulong) 
+sub hex_draw_filled_border(layout as hex_layout, h as hex_axial, c_fill as ulong, c_border as ulong)
 	dim as pt_dbl center = hex_to_pixel(layout, h)
 	'create + fill array with 6 conners positions
 	dim as pt_dbl corner(0 to 5)

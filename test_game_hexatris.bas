@@ -96,13 +96,17 @@ sub draw_board(board() as ulong, layout as hex_layout)
 	next
 end sub
 
-sub draw_piece(piece as piece_type, layout as hex_layout)
+sub draw_piece(piece as piece_type, layout as hex_layout, outline_only as integer)
 	for iTile as integer = 0 to piece_size - 1
 		dim as ulong c_fill = piece.c_fill
 		dim as ulong c_border = &hff000000 or (c_fill shl 1) 'double intensity
 		'dim as hex_axial ha = hex_axial_add(current_piece.tile_pos(iTile), current_piece.abs_pos)
 		dim as hex_axial ha = get_tile_pos(piece, iTile)
-		hex_draw_filled_border(layout, ha, c_fill, c_border)
+		if outline_only = 1 then
+			hex_draw_o(layout, ha, c_border) 'for ghost piece
+		else
+			hex_draw_filled_border(layout, ha, c_fill, c_border) 'play piece
+		end if
 	next
 end sub
 
@@ -128,32 +132,54 @@ end function
 const as double start_interval = 1.0 '1 tiles per second
 const as double drop_interval = 0.05 '20 tiles per second
 
-dim as piece_type current_piece
+dim as piece_type current_piece, ghost_piece
 dim as double t = timer, t_step = start_interval, t_next = t + t_step
 dim as integer enable_control = true
 dim as integer quit = 0, request_new = true
+dim as integer mx, my 'mouse x,y
 
 randomize timer
 while quit = 0
 	if request_new = true then
 		current_piece = new_piece(piece())
 		request_new = false
+		if not free_piece_pos(current_piece, board()) then quit = 2 'game over
 	end if
+	'determine ghost piece location
+	ghost_piece = current_piece
+	while 1
+		ghost_piece.abs_pos.r += 1
+		if not free_piece_pos(ghost_piece, board()) then
+			ghost_piece.abs_pos.r -= 1
+			exit while
+		end if
+	wend
 
 	screenlock
 	line(0, 0)-(SW-1, SH-1), 0, bf 'clear screen
 	draw_board(board(), layout1)
 	if free_piece_pos(current_piece, board()) then
-		draw_piece(current_piece, layout1)
+		draw_piece(current_piece, layout1, 0)
+		if ghost_piece.abs_pos <> current_piece.abs_pos then
+			draw_piece(ghost_piece, layout1, 1)
+		end if
 	end if
 	draw string (5, 0), "keys: up, down, left, right, space, escape"
+	'mouse pointer
+	if getmouse(mx, my) = 0 then
+		dim as hex_cube hc = pixel_to_hex_int(layout1, type(mx, my))
+		dim as hex_axial ha = hex_cube_to_axial(hc)
+		hex_draw_outline(layout1, ha, rgb(255, 255, 255))
+		draw string(5, 30), "hex cube coordinates: " & hc
+		draw string(5, 50), "hex axial coordinates: " & ha
+	end if
 	screenunlock
 
 	dim as string key = inkey
 	if enable_control = true then
 		select case key
 		case KEY_ESC
-			quit = 1
+			quit = 1 'abort by user
 		case KEY_LE
 			move_piece(current_piece, HEX_AX_LE_DN)
 			if not free_piece_pos(current_piece, board()) then
@@ -181,6 +207,7 @@ while quit = 0
 			t_next = t + t_step
 		end select
 	end if
+	'move piece down on time
 	if t > t_next then
 		current_piece.abs_pos.r += 1
 		t_next = t + t_step
@@ -202,16 +229,19 @@ while quit = 0
 	sleep 1
 	t = timer
 wend
-locate 13, 13: print "End, press any key to exit"
+if quit = 2 then
+	locate 13, 21: print "Game over!"
+else
+	locate 13, 13: print "End, press any key to exit"
+end if
 
 getkey()
 
 'steps:
 'implement 'wall-kick'
 'points / scoring: make lines, shift/drop board
-'check cannot place piece on start pos: game over
 'check line drop down/left and/or down right
-'drop position preview (option)
+'next piece indicator
 
 '~ 'show all pieces
 '~ for iPiece as integer = 0 to num_pieces-1
