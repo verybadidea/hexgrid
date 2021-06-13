@@ -20,6 +20,7 @@ dim as hex_layout layout1 = _
 const brd_rh = 10 'board height radius
 const brd_rw = 7 'board width radius
 const brd_psr = -9 'piece start row
+'board contains piece color, 0 is vacant tile
 dim as ulong board(-brd_rh to +brd_rh, -brd_rh to +brd_rh)
 
 const piece_size = 4
@@ -89,7 +90,7 @@ sub draw_board(board() as ulong, layout as hex_layout)
 					end if
 				else
 					'outside board
-					hex_draw_fb(layout, ha, &hff505050, &hff909090)
+					hex_draw_fb(layout, ha, &hff505050, &hff505050 shl 1) '&hff909090
 				end if
 			end if
 		next
@@ -129,10 +130,69 @@ function new_piece(piece() as piece_type) as piece_type
 	return ret_piece
 end function
 
+function mark_lines(board() as ulong) as integer
+	dim as integer num_lines  = 0
+	'check "/"-lines first then "\"-lines
+	'0,10...7,3
+	'-1,10...7,2
+	'...
+	'-7,10...7,-4
+	'-7,9...7,-5
+	'...
+	'-7,4...7,-10
+	'-7,3...6,-10
+	'...
+	'-7,-3...0,-10
+	dim as hex_axial ha
+	'loop rows in center column, direction bottom to top
+	for rc as integer = +10 to -10 step -1
+		dim as integer num_cells = 0, num_filled = 0
+		ha = type(0, rc) 'q,r
+		'move to left down
+		while valid_tile_pos(ha)
+			ha = hex_axial_neighbor(ha, HEX_AX_LE_DN)
+		wend
+		ha = hex_axial_neighbor(ha, HEX_AX_RI_UP) 'one back
+		'scan cells direction right-up
+		while valid_tile_pos(ha)
+			num_cells += 1
+			if board(ha.q, ha.r) <> 0 then num_filled += 1
+			ha = hex_axial_neighbor(ha, HEX_AX_RI_UP)
+		wend
+		'mark grey if line full
+		if num_cells = num_filled then
+			ha = hex_axial_neighbor(ha, HEX_AX_LE_DN) 'one back
+			while valid_tile_pos(ha)
+				board(ha.q, ha.r) = &hff7f7f7f
+				ha = hex_axial_neighbor(ha, HEX_AX_LE_DN)
+			wend
+		end if
+
+		'~ ha = type(0, rc) 'q,r
+		'~ 'scan cells direction left-down
+		'~ while valid_tile_pos(ha)
+			'~ num_cells += 1
+			'~ if board(ha.q, ha.r) <> 0 then num_filled += 1
+			'~ ha = hex_axial_neighbor(ha, HEX_AX_LE_DN)
+		'~ wend
+		'~ 'scan cells direction right-up (start right of center column)
+		'~ ha = hex_axial_neighbor(type(0, rc), HEX_AX_RI_UP)
+		'~ while valid_tile_pos(ha)
+			'~ num_cells += 1
+			'~ if board(ha.q, ha.r) <> 0 then num_filled += 1
+			'~ ha = hex_axial_neighbor(ha, HEX_AX_RI_UP)
+		'~ wend
+		
+		'print num_cells, num_filled
+		'getkey()
+	next
+	return num_lines
+end function
+
 const as double start_interval = 1.0 '1 tiles per second
 const as double drop_interval = 0.05 '20 tiles per second
 
-dim as piece_type current_piece, ghost_piece
+dim as piece_type current_piece, ghost_piece, next_piece = new_piece(piece())
 dim as double t = timer, t_step = start_interval, t_next = t + t_step
 dim as integer enable_control = true
 dim as integer quit = 0, request_new = true
@@ -141,7 +201,8 @@ dim as integer mx, my 'mouse x,y
 randomize timer
 while quit = 0
 	if request_new = true then
-		current_piece = new_piece(piece())
+		current_piece = next_piece
+		next_piece = new_piece(piece())
 		request_new = false
 		if not free_piece_pos(current_piece, board()) then quit = 2 'game over
 	end if
@@ -160,6 +221,7 @@ while quit = 0
 	draw_board(board(), layout1)
 	if free_piece_pos(current_piece, board()) then
 		draw_piece(current_piece, layout1, 0)
+		draw_piece(next_piece, layout1, 1)
 		if ghost_piece.abs_pos <> current_piece.abs_pos then
 			draw_piece(ghost_piece, layout1, 1)
 		end if
@@ -220,6 +282,9 @@ while quit = 0
 					board(ha.q, ha.r) = current_piece.c_fill
 				end if
 			next
+			'check for lines
+			mark_lines(board())
+			'next piece
 			request_new = true
 			enable_control = true
 			t_step = start_interval
