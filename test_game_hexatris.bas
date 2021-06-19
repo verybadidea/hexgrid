@@ -132,19 +132,9 @@ end function
 
 function mark_lines(board() as ulong) as integer
 	dim as integer num_lines  = 0
-	'check "/"-lines first then "\"-lines
-	'0,10...7,3
-	'-1,10...7,2
-	'...
-	'-7,10...7,-4
-	'-7,9...7,-5
-	'...
-	'-7,4...7,-10
-	'-7,3...6,-10
-	'...
-	'-7,-3...0,-10
 	dim as hex_axial ha
 	'loop rows in center column, direction bottom to top
+	'check "/"-lines first
 	for rc as integer = +10 to -10 step -1
 		dim as integer num_cells = 0, num_filled = 0
 		ha = type(0, rc) 'q,r
@@ -167,24 +157,30 @@ function mark_lines(board() as ulong) as integer
 				ha = hex_axial_neighbor(ha, HEX_AX_LE_DN)
 			wend
 		end if
-
-		'~ ha = type(0, rc) 'q,r
-		'~ 'scan cells direction left-down
-		'~ while valid_tile_pos(ha)
-			'~ num_cells += 1
-			'~ if board(ha.q, ha.r) <> 0 then num_filled += 1
-			'~ ha = hex_axial_neighbor(ha, HEX_AX_LE_DN)
-		'~ wend
-		'~ 'scan cells direction right-up (start right of center column)
-		'~ ha = hex_axial_neighbor(type(0, rc), HEX_AX_RI_UP)
-		'~ while valid_tile_pos(ha)
-			'~ num_cells += 1
-			'~ if board(ha.q, ha.r) <> 0 then num_filled += 1
-			'~ ha = hex_axial_neighbor(ha, HEX_AX_RI_UP)
-		'~ wend
-		
-		'print num_cells, num_filled
-		'getkey()
+	next
+	'Now check then "\"-lines
+	for rc as integer = +10 to -10 step -1
+		dim as integer num_cells = 0, num_filled = 0
+		ha = type(0, rc) 'q,r
+		'move to left down
+		while valid_tile_pos(ha)
+			ha = hex_axial_neighbor(ha, HEX_AX_RI_DN)
+		wend
+		ha = hex_axial_neighbor(ha, HEX_AX_LE_UP) 'one back
+		'scan cells direction right-up
+		while valid_tile_pos(ha)
+			num_cells += 1
+			if board(ha.q, ha.r) <> 0 then num_filled += 1
+			ha = hex_axial_neighbor(ha, HEX_AX_LE_UP)
+		wend
+		'mark grey if line full
+		if num_cells = num_filled then
+			ha = hex_axial_neighbor(ha, HEX_AX_RI_DN) 'one back
+			while valid_tile_pos(ha)
+				board(ha.q, ha.r) = &hff7f7f7f
+				ha = hex_axial_neighbor(ha, HEX_AX_RI_DN)
+			wend
+		end if
 	next
 	return num_lines
 end function
@@ -318,3 +314,22 @@ getkey()
 '~ next
 '~ getkey()
 '~ end
+
+
+'~ ha = type(0, rc) 'q,r
+'~ 'scan cells direction left-down
+'~ while valid_tile_pos(ha)
+	'~ num_cells += 1
+	'~ if board(ha.q, ha.r) <> 0 then num_filled += 1
+	'~ ha = hex_axial_neighbor(ha, HEX_AX_LE_DN)
+'~ wend
+'~ 'scan cells direction right-up (start right of center column)
+'~ ha = hex_axial_neighbor(type(0, rc), HEX_AX_RI_UP)
+'~ while valid_tile_pos(ha)
+	'~ num_cells += 1
+	'~ if board(ha.q, ha.r) <> 0 then num_filled += 1
+	'~ ha = hex_axial_neighbor(ha, HEX_AX_RI_UP)
+'~ wend
+
+'print num_cells, num_filled
+'getkey()
