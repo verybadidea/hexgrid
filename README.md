@@ -14,3 +14,12 @@ Hexagonal grid implementation in FreeBASIC based on https://www.redblobgames.com
 - Offset coordinates (Neighbors, Distance, Offset coordinates)
 - Doubled coordinates (Neighbors, Distance, Hex_to_pixel)
 - Make pt_dbl_list obsolete
+
+# Games notes
+
+Flow:
+- Piece placed?
+  -> Check for lines: mark_lines(), uses: scan_mark_line()
+- If lines found?
+  -> Delay, call: drop_lines(), uses: drop_section()
+

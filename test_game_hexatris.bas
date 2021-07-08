@@ -130,60 +130,98 @@ function new_piece(piece() as piece_type) as piece_type
 	return ret_piece
 end function
 
+'scan & mark 1 (diagonal) lines going through center coloumn at row index
+function scan_mark_line(board() as ulong, row as integer, down_dir as integer) as integer
+	dim as integer up_dir = iif(down_dir = HEX_AX_LE_DN, HEX_AX_RI_UP, HEX_AX_LE_UP) 
+	dim as integer num_cells = 0, num_filled = 0
+	dim as hex_axial ha = type(0, row) 'q,r
+	'move to left/right down
+	while valid_tile_pos(ha)
+		ha = hex_axial_neighbor(ha, down_dir)
+	wend
+	ha = hex_axial_neighbor(ha, up_dir) 'one back
+	'scan cells direction right/left-up
+	while valid_tile_pos(ha)
+		num_cells += 1
+		if board(ha.q, ha.r) <> 0 then num_filled += 1
+		ha = hex_axial_neighbor(ha, up_dir)
+	wend
+	'mark grey if line full
+	if num_cells = num_filled then
+		ha = hex_axial_neighbor(ha, down_dir) 'one back
+		while valid_tile_pos(ha)
+			board(ha.q, ha.r) = &hff7f7f7f
+			ha = hex_axial_neighbor(ha, down_dir)
+		wend
+		return true 'full line & marked
+	end if
+	return false 'not a full line
+end function
+
+'~ function drop_section(board() as ulong, row as integer, down_dir as integer) as integer
+	'~ dim as ulong nb_value 'nb = neighbour
+	'~ dim as integer nb_dir = iif(down_dir = HEX_AX_LE_DN, HEX_AX_LE_UP, HEX_AX_RI_UP) 
+	'~ while row >= -brd_rh
+		'~ 'loop line...
+			'~ 'for each tile:
+			'~ 'get neighpos position
+			'~ 'if valid position, move value to current cell
+			'~ 'else set current cell empty
+			
+			
+		'~ '...
+	'~ wend
+'~ end function
+
+'find and mark any complete lines on board
 function mark_lines(board() as ulong) as integer
-	dim as integer num_lines  = 0
-	dim as hex_axial ha
+	dim as integer num_lines = 0
 	'loop rows in center column, direction bottom to top
-	'check "/"-lines first
-	for rc as integer = +10 to -10 step -1
-		dim as integer num_cells = 0, num_filled = 0
-		ha = type(0, rc) 'q,r
-		'move to left down
-		while valid_tile_pos(ha)
-			ha = hex_axial_neighbor(ha, HEX_AX_LE_DN)
-		wend
-		ha = hex_axial_neighbor(ha, HEX_AX_RI_UP) 'one back
-		'scan cells direction right-up
-		while valid_tile_pos(ha)
-			num_cells += 1
-			if board(ha.q, ha.r) <> 0 then num_filled += 1
-			ha = hex_axial_neighbor(ha, HEX_AX_RI_UP)
-		wend
-		'mark grey if line full
-		if num_cells = num_filled then
-			ha = hex_axial_neighbor(ha, HEX_AX_LE_DN) 'one back
-			while valid_tile_pos(ha)
-				board(ha.q, ha.r) = &hff7f7f7f
-				ha = hex_axial_neighbor(ha, HEX_AX_LE_DN)
-			wend
-		end if
-	next
-	'Now check then "\"-lines
-	for rc as integer = +10 to -10 step -1
-		dim as integer num_cells = 0, num_filled = 0
-		ha = type(0, rc) 'q,r
-		'move to left down
-		while valid_tile_pos(ha)
-			ha = hex_axial_neighbor(ha, HEX_AX_RI_DN)
-		wend
-		ha = hex_axial_neighbor(ha, HEX_AX_LE_UP) 'one back
-		'scan cells direction right-up
-		while valid_tile_pos(ha)
-			num_cells += 1
-			if board(ha.q, ha.r) <> 0 then num_filled += 1
-			ha = hex_axial_neighbor(ha, HEX_AX_LE_UP)
-		wend
-		'mark grey if line full
-		if num_cells = num_filled then
-			ha = hex_axial_neighbor(ha, HEX_AX_RI_DN) 'one back
-			while valid_tile_pos(ha)
-				board(ha.q, ha.r) = &hff7f7f7f
-				ha = hex_axial_neighbor(ha, HEX_AX_RI_DN)
-			wend
-		end if
+	for rc as integer = +brd_rh to -brd_rh step -1
+		'check "/"-lines first, then "\"-lines
+		if scan_mark_line(board(), rc, HEX_AX_LE_DN) then num_lines += 1 '/
+		if scan_mark_line(board(), rc, HEX_AX_RI_DN) then num_lines += 1 '\
 	next
 	return num_lines
 end function
+
+function drop_lines(board() as ulong) as integer
+	'make list of lines? start tile + direction?
+	'make copy of board
+	'drop lines top to bottom, use neighbour
+	'drop, check if possible. Yes, update original board. No, reset board copy.
+
+	'loop rows in center column, direction top to bottom
+	for rc as integer = -brd_rh to +brd_rh step +1
+		'if scan_mark_line(board(), rc, HEX_AX_LE_DN) then num_lines += 1 '/
+		'if scan_mark_line(board(), rc, HEX_AX_RI_DN) then num_lines += 1 '\
+	next
+	
+	return 0
+end function
+
+'store tile lines as lists of tiles indexes
+'for use in other procedures, no need for figure this out each time
+sub create_line_list(line_list() as hex_list, board() as ulong)
+	for i_dir as integer = 0 to 1
+		dim as integer down_dir = iif(i_dir = 0, HEX_AX_LE_DN, HEX_AX_RI_DN) 
+		dim as integer up_dir = iif(i_dir = 0, HEX_AX_RI_UP, HEX_AX_LE_UP) 
+		for rc as integer = -brd_rh to +brd_rh step +1 'rc = row @ center
+			dim as hex_axial ha = type(0, rc) 'q,r
+			'move to left/right down
+			while valid_tile_pos(ha)
+				ha = hex_axial_neighbor(ha, down_dir)
+			wend
+			ha = hex_axial_neighbor(ha, up_dir) 'too much, one back
+			'scan cells direction right/left-up
+			'and add inexes to list
+			while valid_tile_pos(ha)
+				line_list(rc, i_dir).push(hex_axial_to_cube(ha))
+				ha = hex_axial_neighbor(ha, up_dir)
+			wend
+		next
+	next
+end sub
 
 const as double start_interval = 1.0 '1 tiles per second
 const as double drop_interval = 0.05 '20 tiles per second
@@ -193,7 +231,9 @@ dim as double t = timer, t_step = start_interval, t_next = t + t_step
 dim as integer enable_control = true
 dim as integer quit = 0, request_new = true
 dim as integer mx, my 'mouse x,y
+dim as hex_list line_list(-brd_rh to +brd_rh, 0 to 1) '/ and \ direction
 
+create_line_list(line_list(), board())
 randomize timer
 while quit = 0
 	if request_new = true then
@@ -279,7 +319,11 @@ while quit = 0
 				end if
 			next
 			'check for lines
-			mark_lines(board())
+			dim as integer num_lines = mark_lines(board())
+			if num_lines > 0 then
+				'later start timer, when timer done: drop_lines.
+				drop_lines(board())
+			end if
 			'next piece
 			request_new = true
 			enable_control = true
@@ -333,3 +377,15 @@ getkey()
 
 'print num_cells, num_filled
 'getkey()
+
+'~ dim byref as hex_list ll = line_list(-brd_rh, 0)
+'~ for i as integer = 0 to ll.last_index()
+	'~ dim as hex_cube hc = ll.pop()
+	'~ dim as hex_axial ha = hex_cube_to_axial(hc)
+	'~ print ha
+'~ next
+'~ for i_dir as integer = 0 to 1
+	'~ for rc as integer = -brd_rh to +brd_rh step +1
+		'~ print line_list(rc, i_dir).size()
+	'~ next
+'~ next
