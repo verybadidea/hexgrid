@@ -43,6 +43,18 @@ dim as piece_type piece(num_pieces-1) = {_ '(q, r)
 	type((0, 0), {(0, -1), (0, 0), (1, 0), (1, 1)},   &hff004070),_
 	type((0, 0), {(0, -1), (0, 0), (-1, 1), (-1, 2)}, &hff507000)}
 
+const as ulong CL_MARKED = &hff7f7f7f
+
+const as string LOG_FILE_NAME = "logfile.txt"
+
+sub log_to_file(text as string)
+   dim as integer file_num
+   file_num = freefile
+   open LOG_FILE_NAME for append as file_num
+   print #file_num, time & " " & text
+   close file_num
+end sub
+
 function get_tile_pos(piece as piece_type, tile_idx as integer) as hex_axial
 	return hex_axial_add(piece.abs_pos, piece.tile_pos(tile_idx))
 end function
@@ -131,70 +143,116 @@ function new_piece(piece() as piece_type) as piece_type
 end function
 
 'scan & mark 1 (diagonal) lines going through center coloumn at row index
-function scan_mark_line(board() as ulong, row as integer, down_dir as integer) as integer
-	dim as integer up_dir = iif(down_dir = HEX_AX_LE_DN, HEX_AX_RI_UP, HEX_AX_LE_UP) 
-	dim as integer num_cells = 0, num_filled = 0
-	dim as hex_axial ha = type(0, row) 'q,r
-	'move to left/right down
-	while valid_tile_pos(ha)
-		ha = hex_axial_neighbor(ha, down_dir)
-	wend
-	ha = hex_axial_neighbor(ha, up_dir) 'one back
-	'scan cells direction right/left-up
-	while valid_tile_pos(ha)
-		num_cells += 1
-		if board(ha.q, ha.r) <> 0 then num_filled += 1
-		ha = hex_axial_neighbor(ha, up_dir)
-	wend
-	'mark grey if line full
-	if num_cells = num_filled then
-		ha = hex_axial_neighbor(ha, down_dir) 'one back
-		while valid_tile_pos(ha)
-			board(ha.q, ha.r) = &hff7f7f7f
-			ha = hex_axial_neighbor(ha, down_dir)
-		wend
-		return true 'full line & marked
-	end if
-	return false 'not a full line
+function scan_mark_line(board() as ulong, line_list() as hex_list, row as integer, dir_idx as integer) as integer
+	dim byref as hex_list ll = line_list(row, dir_idx)
+	'loop tiles in selected row
+	for i as integer = 0 to ll.last_index()
+		dim as hex_axial ha = hex_cube_to_axial(ll.get_(i))
+		if board(ha.q, ha.r) = 0 then return false 'not a full line
+	next
+	'no empty tiles, so mark the complete line
+	for i as integer = 0 to ll.last_index()
+		dim as hex_axial ha = hex_cube_to_axial(ll.get_(i))
+		board(ha.q, ha.r) = CL_MARKED
+	next
+	return true 'full line & marked
 end function
 
-'~ function drop_section(board() as ulong, row as integer, down_dir as integer) as integer
-	'~ dim as ulong nb_value 'nb = neighbour
-	'~ dim as integer nb_dir = iif(down_dir = HEX_AX_LE_DN, HEX_AX_LE_UP, HEX_AX_RI_UP) 
-	'~ while row >= -brd_rh
-		'~ 'loop line...
-			'~ 'for each tile:
-			'~ 'get neighpos position
-			'~ 'if valid position, move value to current cell
-			'~ 'else set current cell empty
-			
-			
-		'~ '...
-	'~ wend
-'~ end function
-
 'find and mark any complete lines on board
-function mark_lines(board() as ulong) as integer
+function mark_lines(board() as ulong, line_list() as hex_list) as integer
 	dim as integer num_lines = 0
 	'loop rows in center column, direction bottom to top
 	for rc as integer = +brd_rh to -brd_rh step -1
 		'check "/"-lines first, then "\"-lines
-		if scan_mark_line(board(), rc, HEX_AX_LE_DN) then num_lines += 1 '/
-		if scan_mark_line(board(), rc, HEX_AX_RI_DN) then num_lines += 1 '\
+		if scan_mark_line(board(), line_list(), rc, 0) then num_lines += 1 '/
+		if scan_mark_line(board(), line_list(), rc, 1) then num_lines += 1 '\
 	next
 	return num_lines
 end function
 
-function drop_lines(board() as ulong) as integer
-	'make list of lines? start tile + direction?
-	'make copy of board
-	'drop lines top to bottom, use neighbour
-	'drop, check if possible. Yes, update original board. No, reset board copy.
+'scan line only
+function scan_line(board() as ulong, line_list() as hex_list, row as integer, dir_idx as integer) as integer
+	dim byref as hex_list ll = line_list(row, dir_idx)
+	'loop tiles in selected row
+	for i as integer = 0 to ll.last_index()
+		dim as hex_axial ha = hex_cube_to_axial(ll.get_(i))
+		if board(ha.q, ha.r) = 0 then return false 'not a full line
+	next
+	return true 'full line & marked
+end function
 
+'clear line only
+sub clear_line(board() as ulong, line_list() as hex_list, row as integer, dir_idx as integer)
+	dim byref as hex_list ll = line_list(row, dir_idx)
+	'loop tiles in selected row
+	for i as integer = 0 to ll.last_index()
+		dim as hex_axial ha = hex_cube_to_axial(ll.get_(i))
+		board(ha.q, ha.r) = 0
+	next
+end sub
+
+'copy line down
+sub copy_line(board() as ulong, line_list() as hex_list, row as integer, dir_idx as integer)
+	dim byref as hex_list ll = line_list(row, dir_idx) 'target
+	'loop tiles in slected row
+	for i as integer = 0 to ll.last_index()
+		dim as hex_axial ha_dst = hex_cube_to_axial(ll.get_(i)) 'to
+		dim as hex_axial ha_src = hex_axial_neighbor(ha_dst, HEX_AX_UP) 'from
+		'copt if valid source, else clear
+		board(ha_dst.q, ha_dst.r) = iif(valid_tile_pos(ha_src), board(ha_src.q, ha_src.r), 0)
+	next
+end sub
+
+sub drop_section(board() as ulong, line_list() as hex_list, start_row as integer, dir_idx as integer)
+	for row as integer = start_row to -brd_rh step -1
+		if row <= -brd_rh then
+			'nothing above to copy from, clear target line
+			clear_line(board(), line_list(), row, dir_idx)
+		else
+			copy_line(board(), line_list(), row, dir_idx)
+		end if
+	next
+end sub
+
+function drop_possible(board() as ulong, line_list() as hex_list, row as integer, dir_idx as integer) as integer
+	if row <= 3 then return true 'can drop (always ok above this height)
+	dim byref as hex_list ll = line_list(row, dir_idx)
+	'dim as hex_axial ha = type(0, row) 'q,r
+	if dir_idx = 0 then '/
+		'get first tile in row
+		dim as hex_axial ha = hex_cube_to_axial(ll.get_(0))
+		'now walk left up the bottom row
+		ha = hex_axial_neighbor(ha, HEX_AX_LE_UP) 'skip first
+		while valid_tile_pos(ha)
+			if board(ha.q, ha.r) <> 0 then return false 'cannot drop field
+			ha = hex_axial_neighbor(ha, HEX_AX_LE_UP)
+		wend
+	else '\
+		'get first tile in row
+		dim as hex_axial ha = hex_cube_to_axial(ll.get_(0))
+		'now walk right up the bottom row
+		ha = hex_axial_neighbor(ha, HEX_AX_RI_UP) 'skip first
+		while valid_tile_pos(ha)
+			if board(ha.q, ha.r) <> 0 then return false 'cannot drop field
+			ha = hex_axial_neighbor(ha, HEX_AX_RI_UP)
+		wend
+	end if
+	return true 'can drop
+end function
+
+function drop_lines(board() as ulong, line_list() as hex_list) as integer
 	'loop rows in center column, direction top to bottom
-	for rc as integer = -brd_rh to +brd_rh step +1
-		'if scan_mark_line(board(), rc, HEX_AX_LE_DN) then num_lines += 1 '/
-		'if scan_mark_line(board(), rc, HEX_AX_RI_DN) then num_lines += 1 '\
+	for row as integer = -brd_rh to +brd_rh step +1
+		'change 'if' to 'while:wend' n, not needed
+		for dir_idx as integer = 0 to 1 '/,\
+			if scan_line(board(), line_list(), row, dir_idx) then
+				if drop_possible(board(), line_list(), row, dir_idx) then
+					drop_section(board(), line_list(), row, dir_idx)
+				else
+					clear_line(board(), line_list(), row, dir_idx)
+				end if
+			end if
+		next
 	next
 	
 	return 0
@@ -233,6 +291,7 @@ dim as integer quit = 0, request_new = true
 dim as integer mx, my 'mouse x,y
 dim as hex_list line_list(-brd_rh to +brd_rh, 0 to 1) '/ and \ direction
 
+log_to_file("Game start")
 create_line_list(line_list(), board())
 randomize timer
 while quit = 0
@@ -319,10 +378,10 @@ while quit = 0
 				end if
 			next
 			'check for lines
-			dim as integer num_lines = mark_lines(board())
+			dim as integer num_lines = mark_lines(board(), line_list())
 			if num_lines > 0 then
 				'later start timer, when timer done: drop_lines.
-				drop_lines(board())
+				drop_lines(board(), line_list())
 			end if
 			'next piece
 			request_new = true
@@ -340,13 +399,15 @@ else
 	locate 13, 13: print "End, press any key to exit"
 end if
 
+log_to_file("Game ended")
 getkey()
 
-'steps:
-'implement 'wall-kick'
-'points / scoring: make lines, shift/drop board
-'check line drop down/left and/or down right
-'next piece indicator
+'TO DO:
+' implement 'wall-kick'
+' points / scoring: make lines, shift/drop board
+' down = fast down, not drop and not rotate
+' state machine
+' index board by hex_axial get/set
 
 '~ 'show all pieces
 '~ for iPiece as integer = 0 to num_pieces-1

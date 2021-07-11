@@ -6,6 +6,7 @@ type hex_list
 	public:
 	declare function push(h as hex_cube) as integer
 	declare function pop() as hex_cube
+	declare function get_(index as integer) as hex_cube
 	declare sub del_()
 	declare function size() as integer
 	declare function last_index() as integer
@@ -32,6 +33,10 @@ function hex_list.pop() as hex_cube
 		end if
 	end if
 	return h_
+end function
+
+function hex_list.get_(index as integer) as hex_cube
+	return h(index)
 end function
 
 sub hex_list.del_()
