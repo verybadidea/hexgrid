@@ -292,9 +292,10 @@ const GS_WAIT_LINE = 3
 
 dim as piece_type current_piece, ghost_piece, next_piece = new_piece(piece())
 dim as double t = timer, dt_drop = dt_drop_start, t_drop = t + dt_drop, t_wait_line
-dim as integer quit = 0, game_state = GS_NEW_PIECE, user_control = true
+dim as integer quit = 0, score = 0, game_state = GS_NEW_PIECE, user_control = true
 dim as integer mx, my 'mouse x,y
 dim as hex_list line_list(-brd_rh to +brd_rh, 0 to 1) '/ and \ direction
+dim as integer line_score(1 to 4) = {100, 300, 500, 800}
 
 'log_to_file("Game start")
 create_line_list(line_list(), board())
@@ -310,7 +311,8 @@ while quit = 0
 			draw_piece(ghost_piece, layout1, 1)
 		end if
 	end if
-	draw string (5, 0), "keys: up, down, left, right, space, escape"
+	draw string (5, 0), "Keys: up, down, left, right, space, escape"
+	draw string (5, 20), "Score: " & score
 	'mouse pointer
 	if getmouse(mx, my) = 0 then
 		dim as hex_cube hc = pixel_to_hex_int(layout1, type(mx, my))
@@ -389,6 +391,7 @@ while quit = 0
 				'check for lines
 				dim as integer num_lines = mark_lines(board(), line_list())
 				if num_lines > 0 then
+					score += line_score(num_lines)
 					'later start timer, when timer done: drop_lines.
 					t_wait_line = t + dt_wait_line
 					game_state = GS_WAIT_LINE
@@ -421,6 +424,8 @@ getkey()
 ' implement 'wall-kick'
 ' points / scoring: make lines, shift/drop board
 ' index board by hex_axial get/set
+' re-enable left turn
+' With / and \ line, not both are cleared
 
 '~ 'show all pieces
 '~ for iPiece as integer = 0 to num_pieces-1
