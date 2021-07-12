@@ -102,7 +102,7 @@ sub draw_board(board() as ulong, layout as hex_layout)
 					end if
 				else
 					'outside board
-					hex_draw_fb(layout, ha, &hff505050, &hff505050 shl 1) '&hff909090
+					hex_draw_fb(layout, ha, &hff505050, (&hff505050 shl 1) and &hffffffff) '&hff909090
 				end if
 			end if
 		next
@@ -281,36 +281,25 @@ sub create_line_list(line_list() as hex_list, board() as ulong)
 	next
 end sub
 
-const as double start_interval = 1.0 '1 tiles per second
-const as double drop_interval = 0.05 '20 tiles per second
+const as double dt_drop_start = 1.0 '1 tiles per second
+const as double dt_drop_fast = 0.05 '20 tiles per second
+const as double dt_wait_line = 0.50
+
+const GS_NOT_INIT = 0
+const GS_NEW_PIECE = 1
+const GS_ACTIVE_PLAY = 2
+const GS_WAIT_LINE = 3
 
 dim as piece_type current_piece, ghost_piece, next_piece = new_piece(piece())
-dim as double t = timer, t_step = start_interval, t_next = t + t_step
-dim as integer enable_control = true
-dim as integer quit = 0, request_new = true
+dim as double t = timer, dt_drop = dt_drop_start, t_drop = t + dt_drop, t_wait_line
+dim as integer quit = 0, game_state = GS_NEW_PIECE, user_control = true
 dim as integer mx, my 'mouse x,y
 dim as hex_list line_list(-brd_rh to +brd_rh, 0 to 1) '/ and \ direction
 
-log_to_file("Game start")
+'log_to_file("Game start")
 create_line_list(line_list(), board())
 randomize timer
 while quit = 0
-	if request_new = true then
-		current_piece = next_piece
-		next_piece = new_piece(piece())
-		request_new = false
-		if not free_piece_pos(current_piece, board()) then quit = 2 'game over
-	end if
-	'determine ghost piece location
-	ghost_piece = current_piece
-	while 1
-		ghost_piece.abs_pos.r += 1
-		if not free_piece_pos(ghost_piece, board()) then
-			ghost_piece.abs_pos.r -= 1
-			exit while
-		end if
-	wend
-
 	screenlock
 	line(0, 0)-(SW-1, SH-1), 0, bf 'clear screen
 	draw_board(board(), layout1)
@@ -332,64 +321,90 @@ while quit = 0
 	end if
 	screenunlock
 
-	dim as string key = inkey
-	if enable_control = true then
-		select case key
-		case KEY_ESC
-			quit = 1 'abort by user
-		case KEY_LE
-			move_piece(current_piece, HEX_AX_LE_DN)
-			if not free_piece_pos(current_piece, board()) then
-				move_piece(current_piece, HEX_AX_RI_UP) 'undo move
+	select case game_state
+	case GS_NEW_PIECE
+		current_piece = next_piece
+		next_piece = new_piece(piece())
+		game_state = GS_ACTIVE_PLAY
+		user_control = true
+		dt_drop = dt_drop_start
+		t_drop = t + dt_drop
+		if not free_piece_pos(current_piece, board()) then quit = 2 'game over
+	case GS_ACTIVE_PLAY
+		'determine ghost piece location
+		ghost_piece = current_piece
+		while 1
+			ghost_piece.abs_pos.r += 1
+			if not free_piece_pos(ghost_piece, board()) then
+				ghost_piece.abs_pos.r -= 1
+				exit while
 			end if
-		case KEY_RI
-			move_piece(current_piece, HEX_AX_RI_DN)
-			if not free_piece_pos(current_piece, board()) then
-				move_piece(current_piece, HEX_AX_LE_UP) 'undo move
-			end if
-		case KEY_UP
-			rotate_piece(current_piece, +1)
-			if not free_piece_pos(current_piece, board()) then
-				rotate_piece(current_piece, -1) 'undo move
-			end if
-		case KEY_DN
-			rotate_piece(current_piece, -1)
-			if not free_piece_pos(current_piece, board()) then
-				rotate_piece(current_piece, +1) 'undo move
-			end if
-		case KEY_SPC
-			enable_control = false
-			current_piece.abs_pos.r += 1
-			t_step = drop_interval
-			t_next = t + t_step
-		end select
-	end if
-	'move piece down on time
-	if t > t_next then
-		current_piece.abs_pos.r += 1
-		t_next = t + t_step
-		if not free_piece_pos(current_piece, board()) then
-			current_piece.abs_pos.r -= 1
-			'copy to board
-			for iTile as integer = 0 to piece_size - 1
-				dim as hex_axial ha = get_tile_pos(current_piece, iTile)
-				if valid_tile_pos(ha) then 'redundant check
-					board(ha.q, ha.r) = current_piece.c_fill
+		wend
+		dim as string key = inkey 'call also without user_control to clear input
+		if user_control = true then
+			'handle user input
+			select case key
+			case KEY_ESC
+				quit = 1 'abort by user
+			case KEY_LE
+				move_piece(current_piece, HEX_AX_LE_DN)
+				if not free_piece_pos(current_piece, board()) then
+					move_piece(current_piece, HEX_AX_RI_UP) 'undo move
 				end if
-			next
-			'check for lines
-			dim as integer num_lines = mark_lines(board(), line_list())
-			if num_lines > 0 then
-				'later start timer, when timer done: drop_lines.
-				drop_lines(board(), line_list())
-			end if
-			'next piece
-			request_new = true
-			enable_control = true
-			t_step = start_interval
-			t_next = t + t_step
+			case KEY_RI
+				move_piece(current_piece, HEX_AX_RI_DN)
+				if not free_piece_pos(current_piece, board()) then
+					move_piece(current_piece, HEX_AX_LE_UP) 'undo move
+				end if
+			case KEY_UP
+				rotate_piece(current_piece, +1)
+				if not free_piece_pos(current_piece, board()) then
+					rotate_piece(current_piece, -1) 'undo move
+				end if
+			case KEY_DN
+				move_piece(current_piece, HEX_AX_DN)
+				if not free_piece_pos(current_piece, board()) then
+					move_piece(current_piece, HEX_AX_UP) 'undo move
+				end if
+			case KEY_SPC
+				user_control = false
+				'current_piece.abs_pos.r += 1 'NOT GOOD !?
+				dt_drop = dt_drop_fast
+				t_drop = t + dt_drop
+			end select
 		end if
-	end if
+		'move piece down on time
+		if t > t_drop then
+			current_piece.abs_pos.r += 1
+			t_drop = t + dt_drop
+			if not free_piece_pos(current_piece, board()) then 'check new position
+				current_piece.abs_pos.r -= 1 'undo move
+				'copy to board
+				for iTile as integer = 0 to piece_size - 1
+					dim as hex_axial ha = get_tile_pos(current_piece, iTile)
+					if valid_tile_pos(ha) then 'redundant check
+						board(ha.q, ha.r) = current_piece.c_fill
+					end if
+				next
+				'check for lines
+				dim as integer num_lines = mark_lines(board(), line_list())
+				if num_lines > 0 then
+					'later start timer, when timer done: drop_lines.
+					t_wait_line = t + dt_wait_line
+					game_state = GS_WAIT_LINE
+				else
+					'next piece
+					game_state = GS_NEW_PIECE
+				end if
+			end if
+		end if
+	case GS_WAIT_LINE
+		if t > t_wait_line then
+			drop_lines(board(), line_list())
+			game_state = GS_NEW_PIECE
+		end if
+	case else
+	end select
 	sleep 1
 	t = timer
 wend
@@ -399,14 +414,12 @@ else
 	locate 13, 13: print "End, press any key to exit"
 end if
 
-log_to_file("Game ended")
+'log_to_file("Game ended")
 getkey()
 
 'TO DO:
 ' implement 'wall-kick'
 ' points / scoring: make lines, shift/drop board
-' down = fast down, not drop and not rotate
-' state machine
 ' index board by hex_axial get/set
 
 '~ 'show all pieces
